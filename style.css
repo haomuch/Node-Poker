@@ -1,0 +1,413 @@
+:root {
+  --bg: #0e7a38;
+  --table: #0a5b28;
+  --text: #f3fff5;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--bg); font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", Arial, sans-serif; color: var(--text); }
+#app { height: 100%; position: relative; }
+
+/* prevent pinch-zoom for Chrome 36+, Safari 13+ */
+html {
+  touch-action: pan-x pan-y;
+  min-height: 100%; /* for Safari */
+}
+
+/* Scale table dynamically based on viewport */
+#table-area {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  transform-origin: center center;
+  width: min(90vw, 140vh);
+  height: min(90vw, 140vh);
+  max-height: 90vh;
+}
+#poker-table {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 40%, #0f6a2f 0%, var(--table) 60%, #06321a 100%);
+  border-radius: 36px;
+  border: 8px solid #06321a;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.45) inset, 0 6px 20px rgba(0,0,0,0.35);
+}
+#room-display {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  background: rgba(0,0,0,0.28);
+  padding: 0.4em 0.8em;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  font-weight: 700;
+  z-index: 10;
+  font-size: clamp(12px, 2vmin, 16px);
+}
+#community {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 1vmin;
+  z-index: 3;
+}
+#community .card {
+  width: clamp(56px, 9vmin, 108px); /* Reduced size slightly */
+  height: calc(clamp(56px, 9vmin, 108px) * 1.4); /* Maintain aspect ratio */
+}
+#pot-display {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 12vmin);
+  transform: translate(-50%, 0);
+  background: rgba(0,0,0,0.28);
+  padding: 0.6em 1em;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  font-weight: 700;
+  z-index: 3;
+  font-size: clamp(14px, 2vmin, 16px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3em;
+}
+#pot-display .winnings {
+  font-size: clamp(12px, 1.8vmin, 14px);
+  opacity: 0.85;
+}
+#players-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+
+/* Player wrap */
+.player-wrap {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.8vmin;
+  pointer-events: none;
+  z-index: 5;
+}
+.hand {
+  display: flex;
+  gap: 0.6vmin;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Card appearance */
+.card {
+  width: clamp(48px, 8vmin, 96px);
+  height: calc(clamp(48px, 8vmin, 96px) * 1.4);
+  background: #fff;
+  border-radius: 8px;
+  border: 3px solid #d7d7d7;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+.card.back {
+  background: repeating-linear-gradient(45deg, #ff9ad1, #ff9ad1 8px, #ffc2e3 8px, #ffc2e3 16px);
+  border: 3px solid #ff6fb9;
+}
+.card svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Player info box */
+.player-box {
+  min-width: clamp(120px, 18vmin, 220px);
+  background: rgba(0,0,0,0.28);
+  border-radius: 12px;
+  padding: 0.5em 0.6em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  pointer-events: none;
+  z-index: 7;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.player-box .name {
+  font-weight: 800;
+  font-size: clamp(16px, 1.8vmin, 20px);
+}
+.player-box .chips {
+  font-size: clamp(13px, 1.4vmin, 18px);
+}
+.player-box .action {
+  font-size: clamp(12px, 1.4vmin, 16px);
+  text-align: right;
+}
+.player-box.me {
+  outline: 2px solid rgba(255,255,255,0.12);
+}
+.player-box.folded {
+  opacity: 0.5;
+  filter: grayscale(0.4);
+}
+.player-box.acting {
+  /* 使用线性渐变实现从右到左的填充效果 */
+  /* background: linear-gradient(to right, #fff var(--progress, 100%), transparent 0%) !important;*/
+  background: #fff !important;
+  color: #111 !important;
+  border: 2px solid #222;
+  box-shadow: 0 0 12px 2px #fff8;
+  opacity: 1 !important;
+  transition: background 0.25s linear; /* 平滑过渡背景 */
+}
+.player-box.acting .name,
+.player-box.acting .chips,
+.player-box.acting .action {
+  color: #111 !important;
+}
+.player-box.winner {
+  background: linear-gradient(135deg, #ffe066 60%, #ffb300 100%) !important;
+  color: #222 !important;
+  border: 2px solid #ffb300;
+  box-shadow: 0 0 18px 4px #ffe06688;
+  opacity: 1 !important;
+  filter: none !important;
+  transition: background 0.2s, color 0.2s;
+}
+.player-box.winner .name,
+.player-box.winner .chips,
+.player-box.winner .action {
+  color: #222 !important;
+}
+
+/* Actions */
+#actions {
+  position: absolute;
+  right: 1vmin;
+  bottom: 1vmin;
+  background: rgba(0,0,0,0.36);
+  padding: 8px;
+  border-radius: 10px;
+  display: block;
+  width: clamp(355px, 26vmin, 400px);
+  z-index: 8;
+  pointer-events: auto;
+}
+#actions .row {
+  display: flex;
+  gap: 0.5em;
+  align-items: center;
+  margin-top: 0.4em;
+}
+#actions button {
+  flex: 1;
+  padding: 0.5em 0.7em;
+  border-radius: 8px;
+  border: none;
+  font-weight: 800;
+  background: #166a2b;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+#actions #btn-fold {
+  background: #cf3328;
+}
+#actions button:not(:disabled):hover {
+  background: #1a7a33;
+}
+#actions button:not(:disabled):active {
+  background: #135623;
+}
+#actions #btn-fold:not(:disabled):hover {
+  background: #fc5b4f;
+}
+#actions #btn-fold:not(:disabled):active {
+  background: #aa2b22;
+}
+#raise-to {
+  padding: 0.5em;
+  border-radius: 8px;
+  border: none;
+  min-width: 15px;
+  flex: 1;
+}
+
+/* Overlays */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.55);
+  z-index: 20;
+}
+.panel {
+  background: #0e4b2a;
+  border-radius: 12px;
+  padding: 1em;
+  border: 1px solid #2a6b3f;
+  width: min(90vw, 380px);
+}
+.panel h2 {
+  margin-top: 0;
+}
+.panel p {
+  margin-bottom: 0;
+}
+.panel input {
+  padding: 0.5em;
+  border-radius: 8px;
+  border: none;
+  display: block;
+  width: 100%;
+  margin: 0.7em 0;
+}
+.panel button {
+  padding: 0.5em 1em;
+  border-radius: 8px;
+  border: none;
+  font-weight: 800;
+  background: #166a2b;
+  color: #fff;
+  cursor: pointer;
+}
+#create-btn {
+  background: #5a5aff;
+}
+
+.rebuy-overlay {
+  /* 调整为居中显示在底部 */
+  position: fixed;
+  left: 50%; /* 水平居中 */
+  bottom: 16px; /* 距离底部16像素 */
+  transform: translateX(-50%); /* 精确水平居中 */
+  z-index: 30;
+  width: min(90vw, 400px); /* 确保父容器足够宽 */
+  align-items: flex-end; /* 确保内容在底部对齐 */
+  justify-content: center;
+}
+.rebuy-panel {
+  /* 移除位置属性，由父元素定位 */
+  background: rgba(10, 60, 30, 0.80);
+  border-radius: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+  min-width: clamp(180px, 24vmin, 200px);
+  color: #fff;
+  /* 增加一个阴影，使其更突出 */
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.2);
+}
+.rebuy-panel button {
+  padding: 0.7em 1.2em; /* 增大内边距，使按钮更大 */
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  font-size: clamp(16px, 2.2vmin, 18px); /* 增大字体 */
+  background: #166a2b; /* 与 .panel button 一致的绿色背景 */
+  color: #fff;
+  cursor: pointer;
+}
+.rebuy-panel button:hover {
+  background: #1a7a33; /* 稍亮绿色 */
+}
+.rebuy-panel button:active {
+  background: #135623; /* 按下时更暗 */
+}
+#rebuy-decline {
+  background: #cf3328; /* 拒绝红色 */
+}
+#rebuy-decline:hover {
+  background: #fc5b4f; /* 稍亮红色 */
+}
+#rebuy-decline:active {
+  background: #aa2b22; /* 按下时更暗 */
+}
+
+/* Portrait mode adjustments */
+@media (max-aspect-ratio: 1/1) {
+  #table-area {
+    transform: translate(-50%, -55%) scale(0.85);
+    width: min(95vw, 100vh);
+    height: 80vh; 
+    max-height: 80vh; /* 添加 max-height 防止过度溢出 */
+  }
+  .player-wrap {
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  .card {
+    width: clamp(44px, 7.5vmin, 88px);
+    height: calc(clamp(44px, 7.5vmin, 88px) * 1.4);
+  }
+  #community .card {
+    width: clamp(52px, 8.5vmin, 100px); /* Reduced size slightly for portrait mode */
+    height: calc(clamp(52px, 8.5vmin, 100px) * 1.4); /* Maintain aspect ratio */
+  }
+  .player-box {
+    min-width: clamp(110px, 17vmin, 200px);
+  }
+/*调整竖屏模式玩家信息框字体大小*/
+  .player-box .name {
+    font-size: clamp(16px, 2.6vmin, 20px);
+  }
+  .player-box .chips {
+    font-size: clamp(13px, 2.2vmin, 18px);
+  }
+  .player-box .action {
+    font-size: clamp(12px, 2vmin, 16px);
+  }
+  #actions {
+    /* 调整为居中显示在底部 */
+    position: fixed; /* 使用 fixed 定位，避免随滚动条移动 */
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 4vmin; /* 距离底部保留一些空间 */
+    width: min(90vw, 355px);
+    padding: 8px;
+  }
+  #community {
+    gap: 0.8vmin;
+  }
+}
+
+/* Small screen adjustments */
+@media (max-width: 700px) {
+  #actions {
+    /* 调整为居中显示在底部 */
+    position: fixed; /* 使用 fixed 定位，避免随滚动条移动 */
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 4vmin; /* 距离底部保留一些空间 */
+    width: min(90vw, 355px);
+    padding: 8px;
+  }
+  .player-wrap {
+    transform: translate(-50%, -50%) scale(0.95);
+  }
+  .card {
+    width: clamp(44px, 7.5vmin, 88px);
+    height: calc(clamp(44px, 7.5vmin, 88px) * 1.4);
+  }
+  #community .card {
+    width: clamp(52px, 8.5vmin, 100px); /* Reduced size slightly for small screens */
+    height: calc(clamp(52px, 8.5vmin, 100px) * 1.4); /* Maintain aspect ratio */
+  }
+  .player-box {
+    min-width: clamp(110px, 17vmin, 200px);
+  }
+  /*调整小屏模式玩家信息框字体大小*/
+  .player-box .name {
+    font-size: clamp(16px, 2.6vmin, 20px);
+  }
+  .player-box .chips {
+    font-size: clamp(13px, 2.2vmin, 18px);
+  }
+  .player-box .action {
+    font-size: clamp(12px, 2vmin, 16px);
+  }
+}

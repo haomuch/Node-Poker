@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>德州扑克 · 多人游戏</title>
+  <meta property="og:title" content="德州扑克 · 多人游戏" />
+  <meta property="og:description" content="随时随地开局德州扑克！" />
+  <meta property="og:image" content="https://fox.eastasia.cloudapp.azure.com/images/thumbnail.png" />
+  <meta property="og:url" content="https://fox.eastasia.cloudapp.azure.com/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <link href="./style.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="app">
+    <div id="room-display"></div>
+    <div id="table-area">
+      <div id="poker-table"></div>
+      <div id="community" aria-label="community-cards"></div>
+      <div id="pot-display"></div>
+    </div>
+
+    <div id="players-layer"></div>
+
+    <div id="actions" style="display:none;">
+            <div class="row">
+                <input id="raise-by" type="number" placeholder="加注额">
+                <button id="btn-raise">加注</button>
+                <button id="btn-call-check">跟注</button>
+                <button id="btn-fold">弃牌</button>
+            </div>
+            <div id="action-tips"></div>
+    </div>
+
+    <div id="join-overlay" class="overlay">
+      <div class="panel">
+        <h2>加入牌桌</h2>
+        <input id="name-input" placeholder="你的名字" maxlength="16"/>
+        <input id="room-input" placeholder="输入4位房间号（可选）" maxlength="4" type="number" />
+        <div style="display:flex;gap:0.6em;margin-top:0.6em;">
+          <button id="join-btn">加入房间</button>
+          <button id="create-btn">创建房间</button>
+        </div>
+        <p class="small">提示：进入房间后将从下一局游戏开始参与。</p>
+      </div>
+    </div>
+
+    <div id="rebuy-overlay" class="rebuy-overlay" style="display:none;">
+      <div class="rebuy-panel">
+        <h3>重新 Buy-in</h3>
+        <p id="rebuy-text">你的筹码为 0，是否重新 Buy-in？</p>
+        <div style="display:flex;gap:0.8em;margin-top:0.6em;">
+          <button id="rebuy-accept">接受</button>
+          <button id="rebuy-decline">拒绝</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="./client.js"></script>
+</body>
+</html>
