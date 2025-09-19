@@ -11,6 +11,7 @@ let revealedHoles = {};
 let prevState = null; // 定义前一条街默认状态
 let actDeadline = null; // 新增：服务器推送的当前回合截止时间戳（ms）
 let perSecondTimer = null; // 新增：本地每秒刷新计时器
+let lastRaiseAmount = 0; // 新增：记录玩家上一次的加注金额
 
 const els = {
   playersLayer: document.getElementById("players-layer"),
@@ -165,7 +166,7 @@ function render() {
   const MAX_PLAYERS = 6;
 
   const hFactor = 1.0;
-  const vFactor = 1.5;
+  const vFactor = 1.6;
   const uiSeatPositions = [
     { x: cx, y: cy + halfHeight }, // 6点钟
     { x: cx - hFactor * halfWidth, y: cy + vFactor * sideOffset }, // 8点钟
@@ -245,8 +246,25 @@ function render() {
       const showClock = (p.playerId === state.currentToAct) && (state.state === "preflop" || state.state === "flop" || state.state === "turn" || state.state === "river");
       name.innerHTML = `${p.name} ${ (p.seat === state.dealerSeat) ? '<span class="dealer-icon">🔄</span>' : '' } ${showClock ? '⏳' : ''}`;
       const chips = document.createElement("div"); chips.className = "chips"; chips.textContent = `筹码：${p.chips}`;
-      const act = document.createElement("div"); act.className = "action"; act.textContent = p.lastAction ? `${p.lastAction}${p.lastAmount ? ` ${p.lastAmount}` : ""}` : "";
-      
+      const act = document.createElement("div");
+      act.className = "action";
+
+      // 只在 p.lastAction 有值的时候显示行动信息
+      if (p.lastAction) {
+          // 如果是 All-In，直接显示 All-In
+          if (p.allIn) {
+              act.textContent = "All-In";
+          } else {
+              // 如果行动是 fold, join, 等，只显示 lastAction
+              if (p.lastAmount === 0) {
+                  act.textContent = p.lastAction;
+              } else {
+                  // 如果有金额，则显示行动和金额
+                  act.textContent = `${p.lastAction} ${p.lastAmount}`;
+              }
+          }
+      }
+
       box.appendChild(name); box.appendChild(chips); box.appendChild(act);
 
       wrap.appendChild(handDiv); wrap.appendChild(box);
@@ -273,8 +291,8 @@ function render() {
     }
     els.tips.textContent = tip;
 
-    if (document.activeElement !== els.raiseBy && !els.raiseBy.value) {
-      els.raiseBy.value = Math.max(actionOpts.minRaiseSize, 0);
+    if (document.activeElement !== els.raiseBy) { // 仅在输入框未被聚焦时更新
+      els.raiseBy.value = Math.max(actionOpts.minRaiseSize || 0, lastRaiseAmount || 0);
     }
     els.raiseBy.min = Math.max(actionOpts.minRaiseSize, 0);
     if (actionOpts.maxRaiseSize) els.raiseBy.max = actionOpts.maxRaiseSize;
@@ -285,10 +303,11 @@ function render() {
 }
 
 function sendRaiseAction() {
-    if (actionOpts.yourTurn) {
-        const v = parseInt(els.raiseBy.value || 0, 10);
-        socket.emit("action", { type: "raise", amount: Number(els.raiseBy.value) });
-    }
+  if (actionOpts.yourTurn) {
+    const v = parseInt(els.raiseBy.value || 0, 10);
+    lastRaiseAmount = v; // 新增：记录本次加注金额
+    socket.emit("action", { type: "raise", amount: Number(els.raiseBy.value) });
+  }
 }
 
 socket.on("connect", () => {
@@ -358,6 +377,7 @@ socket.on("actions", opts => {
   actionOpts = Object.assign(actionOpts, opts || {});
   if (state && state.state === "preflop" && prevState !== "preflop") {
     els.raiseBy.value = actionOpts.minRaiseSize || 0;
+    lastRaiseAmount = 0; // 新增：在新 pre-flop 轮开始时重置
   }
   render();
 });

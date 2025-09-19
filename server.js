@@ -1,6 +1,3 @@
-// server.js
-// 完整德州扑克服务器（在上一版基础上，仅补丁下注轮轮转：修复“有玩家主动 all-in 后只给下一位行动，其他玩家被跳过”的问题）
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -449,63 +446,79 @@ function findNextActorFromSeat(table, seat){
 
 // ---------------- Progression: after betting ----------------
 function proceedAfterBetting(table){
-  const alive = inHandPlayers(table);
-  if(alive.length === 1){
-    clearTurnTimer(table);
-    endHandSingleWinner(table, alive[0]);
-    return;
-  }
-
-  // nobody can act -> run out all cards and showdown
-  if(activePlayersCanAct(table).length === 0){
-    runOutToShowdown(table);
-    return;
-  } else if(activePlayersCanAct(table).length === 1 && alive.length > 1) {
-    runOutToShowdown(table);
-    return;
-  }
-
-  // clear per-street variables
-  for(const p of table.players){ p.betThisStreet = 0; p.hasActed = false; }
-  table.highestBet = 0;
+  // Clear currentToAct and pendingActors to stop frontend from showing "acting" state and timer
+  table.currentToAct = null;
+  table.pendingActors = [];
   clearTurnTimer(table);
-  
-  // Bug Fix: Reset side pots for the new betting street
-  table.sidePots = [];
+  broadcastState(table); // Broadcast state immediately to update frontend
 
-  // 重置本街 pendingActors
-  let first = null;
+  // Add a 1.5-second delay before proceeding to the next street
+  setTimeout(() => {
+    const alive = inHandPlayers(table);
+    if(alive.length === 1){
+      clearTurnTimer(table);
+      endHandSingleWinner(table, alive[0]);
+      return;
+    }
 
-  if(table.state === "preflop"){
-    table.community.push(table.deck.pop(), table.deck.pop(), table.deck.pop());
-    table.state = "flop";
-    table.lastRaiseSize = BIG_BLIND; // <--- 新增
-    first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
-  }else if(table.state === "flop"){
-    table.community.push(table.deck.pop());
-    table.state = "turn";
-    table.lastRaiseSize = BIG_BLIND; // <--- 新增
-    first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
-  }else if(table.state === "turn"){
-    table.community.push(table.deck.pop());
-    table.state = "river";
-    table.lastRaiseSize = BIG_BLIND; // <--- 新增
-    first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
-  }else if(table.state === "river"){
-    goShowdown(table);
-    return;
-  }
+    // nobody can act -> run out all cards and showdown
+    if(activePlayersCanAct(table).length === 0){
+      runOutToShowdown(table);
+      return;
+    } else if(activePlayersCanAct(table).length === 1 && alive.length > 1) {
+      runOutToShowdown(table);
+      return;
+    }
 
-  // BUG FIX: Recalculate side pots after dealing community cards for a new street
-  table.sidePots = buildPotsFromCommitted(table);
+    // clear per-street variables
+    for(const p of table.players){ 
+      p.betThisStreet = 0; 
+      p.hasActed = false; 
+      // 新增：清除玩家上条街的lastAction和lastAmount（如果他们没有All-in或者Fold）
+      if (!p.allIn && !p.folded) {
+        p.lastAction = null;
+        p.lastAmount = 0;
+      }
+    }
+    table.highestBet = 0;
+    
+    // Bug Fix: Reset side pots for the new betting street
+    table.sidePots = [];
 
-  initPendingForStreet(table, first || {seat: table.dealerSeat}); // 空也容错
-  table.currentToAct = first ? first.playerId : null; // 修正：用playerId
+    // 重置本街 pendingActors
+    let first = null;
 
-  // 轮到 first 时，启动20秒倒计时
-  if (first){ startTurnTimer(table, first); }
+    if(table.state === "preflop"){
+      table.community.push(table.deck.pop(), table.deck.pop(), table.deck.pop());
+      table.state = "flop";
+      table.lastRaiseSize = BIG_BLIND; // <--- 新增
+      first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
+    }else if(table.state === "flop"){
+      table.community.push(table.deck.pop());
+      table.state = "turn";
+      table.lastRaiseSize = BIG_BLIND; // <--- 新增
+      first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
+    }else if(table.state === "turn"){
+      table.community.push(table.deck.pop());
+      table.state = "river";
+      table.lastRaiseSize = BIG_BLIND; // <--- 新增
+      first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
+    }else if(table.state === "river"){
+      goShowdown(table);
+      return;
+    }
 
-  broadcastState(table);
+    // BUG FIX: Recalculate side pots after dealing community cards for a new street
+    table.sidePots = buildPotsFromCommitted(table);
+
+    initPendingForStreet(table, first || {seat: table.dealerSeat}); // 空也容错
+    table.currentToAct = first ? first.playerId : null; // 修正：用playerId
+
+    // 轮到 first 时，启动20秒倒计时
+    if (first){ startTurnTimer(table, first); }
+
+    broadcastState(table);
+  }, 1500); // 1.5-second delay
 }
 
 // run out remaining community cards then showdown
@@ -670,7 +683,6 @@ function endHandSingleWinner(table, winner){
   }
   table.state = "waiting";
   table.currentToAct = null;
-  table.highestBet = 0;
   table.pendingActors = [];
   table.sidePots = []; // Fix: Reset side pots after the hand ends.
 

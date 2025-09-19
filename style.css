@@ -193,7 +193,7 @@ html {
   padding: 8px;
   border-radius: 10px;
   display: block;
-  width: clamp(355px, 26vmin, 400px);
+  width: clamp(355px, 80vmin, 420px);
   z-index: 8;
   pointer-events: auto;
 }
@@ -209,6 +209,7 @@ html {
   border-radius: 8px;
   border: none;
   font-weight: 800;
+  font-size: clamp(12px, 2.2vmin, 14px); /* 设置按钮字体大小 */
   background: #166a2b;
   color: #fff;
   cursor: pointer;
@@ -229,12 +230,13 @@ html {
 #actions #btn-fold:not(:disabled):active {
   background: #aa2b22;
 }
-#raise-to {
+#raise-by {
   padding: 0.5em;
   border-radius: 8px;
   border: none;
-  min-width: 15px;
+  min-width: 10px;
   flex: 1;
+  font-size: clamp(12px, 2.2vmin, 14px); /* 设置字体大小 */
 }
 
 /* Overlays */
@@ -261,24 +263,38 @@ html {
   margin-bottom: 0;
 }
 .panel input {
-  padding: 0.5em;
+  padding: 0.8em;
   border-radius: 8px;
   border: none;
   display: block;
   width: 100%;
   margin: 0.7em 0;
+  font-size: 14px; /* 增大字体大小 */
 }
 .panel button {
-  padding: 0.5em 1em;
+  padding: 0.8em 1em;
   border-radius: 8px;
   border: none;
+  font-size: 14px; /* 增大字体大小 */
   font-weight: 800;
   background: #166a2b;
   color: #fff;
   cursor: pointer;
 }
+.panel button:hover {
+  background: #1a7a33; /* 稍亮绿色 */
+}
+.panel button:active {
+  background: #135623; /* 按下时更暗 */
+}
 #create-btn {
-  background: #5a5aff;
+  background: #2a2ae0;
+}
+#create-btn:hover {
+  background: #4c4cff; /* 稍亮蓝色 */
+}
+#create-btn:active {
+  background: #1313c5; /* 按下时更暗 */
 }
 
 .rebuy-overlay {
@@ -304,11 +320,11 @@ html {
   box-shadow: 0 -4px 12px rgba(0,0,0,0.2);
 }
 .rebuy-panel button {
-  padding: 0.7em 1.2em; /* 增大内边距，使按钮更大 */
+  padding: 0.6em 1.2em; /* 增大内边距，使按钮更大 */
   border-radius: 8px;
   border: none;
   font-weight: 700;
-  font-size: clamp(16px, 2.2vmin, 18px); /* 增大字体 */
+  font-size: clamp(14px, 2.2vmin, 16px); /* 增大字体 */
   background: #166a2b; /* 与 .panel button 一致的绿色背景 */
   color: #fff;
   cursor: pointer;
@@ -367,7 +383,7 @@ html {
     left: 50%;
     transform: translateX(-50%);
     bottom: 4vmin; /* 距离底部保留一些空间 */
-    width: min(90vw, 355px);
+    width: min(90vw, 420px);
     padding: 8px;
   }
   #community {
@@ -383,7 +399,7 @@ html {
     left: 50%;
     transform: translateX(-50%);
     bottom: 4vmin; /* 距离底部保留一些空间 */
-    width: min(90vw, 355px);
+    width: min(90vw, 420px);
     padding: 8px;
   }
   .player-wrap {
