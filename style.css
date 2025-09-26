@@ -357,8 +357,8 @@ html {
     transform: translate(-50%, -50%) scale(0.95);
   }
   .card {
-    width: clamp(44px, 7.5vmin, 88px);
-    height: calc(clamp(44px, 7.5vmin, 88px) * 1.4);
+    width: clamp(48px, 8vmin, 96px);
+    height: calc(clamp(48px, 8vmin, 96px) * 1.4);
   }
   #community .card {
     width: clamp(52px, 8.5vmin, 100px); /* Reduced size slightly for portrait mode */
@@ -406,8 +406,8 @@ html {
     transform: translate(-50%, -50%) scale(0.95);
   }
   .card {
-    width: clamp(44px, 7.5vmin, 88px);
-    height: calc(clamp(44px, 7.5vmin, 88px) * 1.4);
+    width: clamp(48px, 8vmin, 96px);
+    height: calc(clamp(48px, 8vmin, 96px) * 1.4);
   }
   #community .card {
     width: clamp(52px, 8.5vmin, 100px); /* Reduced size slightly for small screens */
@@ -426,4 +426,36 @@ html {
   .player-box .action {
     font-size: clamp(12px, 2vmin, 16px);
   }
+}
+
+/* 新增：音效开关样式 */
+.sound-toggle {
+    position: fixed;
+    right: 16px;
+    top: 16px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.28);
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    z-index: 10;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.sound-toggle:hover {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.sound-toggle.off .icon {
+    opacity: 0.5;
+    filter: grayscale(100%);
+}
+
+.sound-toggle .icon {
+    font-size: 20px;
+    pointer-events: none;
 }

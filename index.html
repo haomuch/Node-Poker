@@ -5,13 +5,22 @@
   <title>德州扑克 · 多人游戏</title>
   <meta property="og:title" content="德州扑克 · 多人游戏" />
   <meta property="og:description" content="随时随地开局德州扑克！" />
-  <meta property="og:image" content="https://example.com/images/thumbnail.png" /> <!--需要把example.com替换为你的实际服务器网址-->
-  <meta property="og:url" content="https://example.com/" /> <!--需要把example.com替换为你的实际服务器网址-->
+  <meta property="og:image" content="https://fox.eastasia.cloudapp.azure.com/media/thumbnail.png" /> <!--需要把example.com替换为你的实际服务器网址-->
+  <meta property="og:url" content="https://fox.eastasia.cloudapp.azure.com/" /> <!--需要把example.com替换为你的实际服务器网址-->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <link href="./style.css" rel="stylesheet" />
 </head>
 <body>
   <div id="app">
+    <audio id="sound-bet" src="media/bet.mp3" preload="auto"></audio>
+    <audio id="sound-check" src="media/check.mp3" preload="auto"></audio>
+    <audio id="sound-fold" src="media/fold.mp3" preload="auto"></audio>
+    <audio id="sound-deal" src="media/deal.mp3" preload="auto"></audio>
+    <audio id="sound-win" src="media/win.mp3" preload="auto"></audio>
+    <audio id="sound-your-turn" src="media/your_turn.mp3" preload="auto"></audio>
+    <div id="sound-toggle" class="sound-toggle">
+      <span class="icon">🔊</span>
+    </div>
     <div id="room-display"></div>
     <div id="table-area">
       <div id="poker-table"></div>
@@ -59,6 +68,4 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="./client.js"></script>
 </body>
-
 </html>
-

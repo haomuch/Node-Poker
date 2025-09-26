@@ -13,6 +13,70 @@ let actDeadline = null; // 新增：服务器推送的当前回合截止时间�
 let perSecondTimer = null; // 新增：本地每秒刷新计时器
 let lastRaiseAmount = 0; // 新增：记录玩家上一次的加注金额
 
+// Sound switch and audio references
+let soundEnabled = localStorage.getItem('soundEnabled') !== 'false'; // Default: enabled
+let audioUnlocked = false; // 新增：音频解锁状态
+const sounds = {
+  bet: document.getElementById('sound-bet'),
+  check: document.getElementById('sound-check'),
+  fold: document.getElementById('sound-fold'),
+  deal: document.getElementById('sound-deal'),
+  win: document.getElementById('sound-win'),
+  turn: document.getElementById('sound-your-turn') // Matches HTML
+};
+
+// Set default volume and events
+Object.entries(sounds).forEach(([key, audio]) => {
+  if (audio) {
+    audio.volume = 0.5;
+    audio.preload = 'auto';
+    // 新增：监听加载完成
+    audio.addEventListener('loadeddata', () => console.log(`${key} loaded fully`));
+    // 新增：监听结束，避免重叠
+    audio.addEventListener('ended', () => {
+      audio.currentTime = 0; // 预重置
+    });
+    // 新增：错误处理
+    audio.addEventListener('error', (e) => console.warn(`Audio ${key} error:`, e));
+  }
+});
+
+// 改进播放函数
+function playSound(type) {
+  if (!soundEnabled || !sounds[type]) return;
+  const audio = sounds[type];
+  if (audio.playing) return;
+  audio.playing = true;
+
+  audio.pause(); // 先暂停
+  audio.currentTime = 0; // 重置
+
+  // 监听 seeked 事件（一次性）
+  const onSeeked = () => {
+    audio.removeEventListener('seeked', onSeeked);
+    audio.play().then(() => {
+      audio.playing = false;
+    }).catch(err => {
+      console.warn('Audio play failed:', err);
+      audio.playing = false;
+      if (!audioUnlocked && err.name === 'NotAllowedError') {
+        unlockAudio();
+      }
+    });
+  };
+  audio.addEventListener('seeked', onSeeked);
+}
+
+// 新增：解锁音频（用户交互后）
+function unlockAudio() {
+  const silentAudio = new Audio('data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=');
+  silentAudio.volume = 0;
+  silentAudio.play().then(() => {
+    audioUnlocked = true;
+    console.log('Audio unlocked');
+  }).catch(() => console.warn('Audio unlock failed'));
+}
+
 const els = {
   playersLayer: document.getElementById("players-layer"),
   community: document.getElementById("community"),
@@ -374,13 +438,31 @@ socket.on("state", s => {
 
 socket.on("hole", cards => { myHole = cards || []; render(); });
 socket.on("actions", opts => {
+  const wasYourTurn = actionOpts.yourTurn;
   actionOpts = Object.assign(actionOpts, opts || {});
+  if (actionOpts.yourTurn && !wasYourTurn) {
+    playSound('turn'); // Plays your_turn.m4a
+  }
   if (state && state.state === "preflop" && prevState !== "preflop") {
     els.raiseBy.value = actionOpts.minRaiseSize || 0;
-    lastRaiseAmount = 0; // 新增：在新 pre-flop 轮开始时重置
+    lastRaiseAmount = 0;
   }
   render();
 });
+
+socket.on("play_sound", ({ type, playerId, playerIds }) => {
+  if (type === 'win') {
+    // Play only for winner(s)
+    const winIds = playerIds || [playerId];
+    if (winIds.includes(me.playerId)) {
+      playSound('win');
+    }
+  } else {
+    // Play fold, check, bet, deal for all players
+    playSound(type);
+  }
+});
+
 socket.on("showdown_holes", reveal => { revealedHoles = reveal || {}; render(); });
 
 socket.on("rebuy_request", ({ amount }) => {
@@ -425,9 +507,41 @@ window.addEventListener('load', () => {
     me.name = savedUsername;
     els.nameInput.value = savedUsername;
   }
+
+  // 增强预加载
+  Object.values(sounds).forEach(audio => {
+    if (audio) {
+      audio.volume = 0.5;
+      audio.preload = 'auto';
+      audio.load();  // 强制加载
+      audio.addEventListener('canplaythrough', () => console.log(`Audio ${audio.id} loaded fully`));  // 调试日志
+    }
+  });
+
+  // Sound toggle
+  const soundToggle = document.getElementById('sound-toggle');
+  if (soundToggle) {
+    const icon = soundToggle.querySelector('.icon');
+    function updateSoundToggle() {
+      icon.textContent = soundEnabled ? '🔊' : '🔈';
+      if (soundEnabled) {
+        soundToggle.classList.remove('off');
+      } else {
+        soundToggle.classList.add('off');
+      }
+      localStorage.setItem('soundEnabled', soundEnabled);
+    }
+    updateSoundToggle();
+
+    soundToggle.addEventListener('click', () => {
+      soundEnabled = !soundEnabled;
+      updateSoundToggle();
+    });
+  }
 });
 
 els.joinBtn.addEventListener("click", () => {
+  unlockAudio(); // 新增：尝试解锁音频
   const name = (els.nameInput.value || "").trim() || ("Player" + Math.floor(Math.random() * 1000));
   const room = (els.roomInput.value || "").trim();
   me.name = name;
@@ -437,6 +551,7 @@ els.joinBtn.addEventListener("click", () => {
 });
 
 els.createBtn.addEventListener("click", () => {
+  unlockAudio(); // 新增：尝试解锁音频
   const name = (els.nameInput.value || "").trim() || ("Player" + Math.floor(Math.random() * 1000));
   me.name = name;
   setWithExpiry('pokerUsername', name);

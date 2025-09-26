@@ -11,6 +11,15 @@ app.use(express.static(__dirname));
 const PORT = 3000;
 server.listen(PORT, () => console.log(`Poker server running at http://0.0.0.0:${PORT}`));
 
+// ---------------- Sound Types ----------------
+const SOUND_TYPES = {
+  FOLD: 'fold',
+  CHECK: 'check',
+  BET: 'bet', // 用于 call、raise、all-in
+  WIN: 'win',
+  DEAL: 'deal' // 新增：发牌音效
+};
+
 // 自定义 UUID v4 生成器（避免依赖外部模块）
 function uuidv4() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -240,6 +249,7 @@ function autoAct(table, player){
   if (!player.inHand || player.folded || player.allIn) return;
 
   const toCall = Math.max(0, (table.highestBet || 0) - (player.betThisStreet || 0));
+  let soundType = null;  // 新增：声明 soundType
   player.hasActed = true;
   removeFromPending(table, player.playerId); // 修正
 
@@ -247,17 +257,24 @@ function autoAct(table, player){
     // 自动过牌
     player.lastAction = "Check (auto)";
     player.lastAmount = 0;
+    soundType = SOUND_TYPES.CHECK;  // 新增：赋值
   } else {
     // 自动弃牌
     player.folded = true;
     player.lastAction = "Fold (auto)";
     player.lastAmount = 0;
+    soundType = SOUND_TYPES.FOLD;  // 新增：赋值
   }
   const aliveAfter = inHandPlayers(table);
   if (aliveAfter.length === 1) {
     clearTurnTimer(table);
     endHandSingleWinner(table, aliveAfter[0]);
     return;
+  }
+
+  // 广播音效
+  if (soundType) {
+    io.to(table.roomCode).emit("play_sound", { type: soundType, playerId: player.playerId });
   }
 
   table.sidePots = buildPotsFromCommitted(table); // 重新计算边池
@@ -300,21 +317,29 @@ function autoTimeoutAct(table, player){
 
   // 执行动作
   const toCall = Math.max(0, (table.highestBet || 0) - (player.betThisStreet || 0));
+  let soundType = null;  // 新增：声明 soundType
   player.hasActed = true;
   removeFromPending(table, player.playerId);
   if (toCall === 0){
     player.lastAction = "Check (auto)";
     player.lastAmount = 0;
+    soundType = SOUND_TYPES.CHECK;  // 新增：赋值
   } else {
     player.folded = true;
     player.lastAction = "Fold (auto)";
     player.lastAmount = 0;
+    soundType = SOUND_TYPES.FOLD;  // 新增：赋值
   }
   const aliveAfter = inHandPlayers(table);
   if (aliveAfter.length === 1) {
     clearTurnTimer(table);
     endHandSingleWinner(table, aliveAfter[0]);
     return;
+  }
+
+  // 广播音效
+  if (soundType) {
+    io.to(table.roomCode).emit("play_sound", { type: soundType, playerId: player.playerId });
   }
 
   table.sidePots = buildPotsFromCommitted(table);
@@ -370,7 +395,7 @@ function broadcastState(table){
   };
 
   io.to(table.roomCode).emit("state", pub);
-
+  
   // private hole to each player
   for(const p of table.players) io.to(p.id).emit("hole", p.inHand ? (p.hole||[]) : []);
 
@@ -469,6 +494,7 @@ function proceedAfterBetting(table){
       runOutToShowdown(table);
       return;
     }
+    
 
     // clear per-street variables
     for(const p of table.players){ 
@@ -493,16 +519,23 @@ function proceedAfterBetting(table){
       table.state = "flop";
       table.lastRaiseSize = BIG_BLIND; // <--- 新增
       first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
+    // Broadcast deal sound for flop
+    io.to(table.roomCode).emit("play_sound", { type: SOUND_TYPES.DEAL });
     }else if(table.state === "flop"){
       table.community.push(table.deck.pop());
       table.state = "turn";
       table.lastRaiseSize = BIG_BLIND; // <--- 新增
       first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
+      // Broadcast deal sound for turn
+    io.to(table.roomCode).emit("play_sound", { type: SOUND_TYPES.DEAL });
     }else if(table.state === "turn"){
       table.community.push(table.deck.pop());
       table.state = "river";
       table.lastRaiseSize = BIG_BLIND; // <--- 新增
       first = nextSeatFrom(table, table.dealerSeat, p=>p.inHand && !p.folded && !p.allIn);
+      // Broadcast deal sound for river
+    io.to(table.roomCode).emit("play_sound", { type: SOUND_TYPES.DEAL });
+  }else if(table.state === "turn"){
     }else if(table.state === "river"){
       goShowdown(table);
       return;
@@ -525,6 +558,8 @@ function proceedAfterBetting(table){
 function runOutToShowdown(table){
   while(table.community.length < 5) table.community.push(table.deck.pop());
   goShowdown(table);
+  // Broadcast win sound for multiple winners
+  io.to(table.roomCode).emit("play_sound", { type: SOUND_TYPES.WIN, playerIds: potWinners.map(w => w.playerId) });
 }
 
 // schedule next hand after a delay
@@ -592,7 +627,9 @@ function goShowdown(table){
                   potWinners.push(eligible);
               }
           }
-          
+          // 广播赢家音效（使用 potWinners）
+          io.to(table.roomCode).emit("play_sound", { type: SOUND_TYPES.WIN, playerIds: potWinners.map(w => w.playerId) });
+
           // 分发该池子奖金
           if (potWinners.length > 0) {
               const share = Math.floor(potSize / potWinners.length);
@@ -681,6 +718,9 @@ function endHandSingleWinner(table, winner){
           p.reveal = false;
       }
   }
+  // 广播单赢家音效
+  io.to(table.roomCode).emit("play_sound", { type: SOUND_TYPES.WIN, playerId: winner.playerId });
+
   table.state = "waiting";
   table.currentToAct = null;
   table.pendingActors = [];
@@ -956,10 +996,14 @@ io.on("connection", socket=>{
     const maxRaiseSize = p.chips;
     const maxRaiseTo = (table.highestBet||0) + maxRaiseSize;
 
+    // 新增：声明 soundType
+    let soundType = null;
+
     // ---- 执行动作 ----
     if(type === "fold"){
       p.folded = true; p.lastAction = "Fold"; p.lastAmount = 0; p.hasActed = true;
       removeFromPending(table, p.playerId);
+      soundType = SOUND_TYPES.FOLD;  // 新增：赋值
       const aliveAfter = inHandPlayers(table);
       if (aliveAfter.length === 1) {
         clearTurnTimer(table);
@@ -970,6 +1014,7 @@ io.on("connection", socket=>{
       if(toCall !== 0) return;
       p.lastAction = "Check"; p.lastAmount = 0; p.hasActed = true;
       removeFromPending(table, p.playerId);
+      soundType = SOUND_TYPES.CHECK;  // 新增：赋值
     }else if(type === "call"){
       if(toCall <= 0) return;
       const pay = Math.min(p.chips, toCall);
@@ -977,6 +1022,7 @@ io.on("connection", socket=>{
       p.lastAction = "Call"; p.lastAmount = pay; p.hasActed = true;
       if(p.chips === 0) p.allIn = true;
       removeFromPending(table, p.playerId);
+      soundType = SOUND_TYPES.BET;  // 新增：赋值
     }    else if(type === "raise"){
       let raiseBy = Math.max(0, Math.floor(amount || 0));
       if (raiseBy < minRaiseSize) return; // 不允许小于最小加注额
@@ -1018,7 +1064,8 @@ io.on("connection", socket=>{
           } else {
               removeFromPending(table, p.playerId);
           }
-    }
+      }
+      soundType = SOUND_TYPES.BET;  // 新增：赋值（raise 和 all-in 都用 bet 音效）
     }else{
       return;
     }
@@ -1026,6 +1073,11 @@ io.on("connection", socket=>{
     table.sidePots = buildPotsFromCommitted(table);
 
     broadcastState(table);
+
+      // 广播音效
+    if (soundType) {
+      io.to(table.roomCode).emit("play_sound", { type: soundType, playerId: p.playerId });
+    }
 
     const next = nextPendingAfter(table, p.seat) || findNextActorFromSeat(table, p.seat);
     if(next){
