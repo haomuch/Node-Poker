@@ -6,7 +6,21 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+//app.use(express.static(__dirname));//把网站音频文件替换为下面的长期缓存策略
 app.use(express.static(__dirname));
+app.use('/media', express.static(__dirname + '/media', {
+  setHeaders: (res, path) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
+    // 可选：强制 MIME 类型
+    if (path.endsWith('.m4a')) {
+      res.setHeader('Content-Type', 'audio/mp4');
+    }
+    // 可选：强制缓存策略
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+}));
 
 const PORT = 3000;
 server.listen(PORT, () => console.log(`Poker server running at http://0.0.0.0:${PORT}`));
@@ -391,7 +405,9 @@ function broadcastState(table){
     lastRaiseSize: table.lastRaiseSize,
     handId: table.handId,
     potTotal: potTotal(table),
-    actDeadline: table.turnDeadline || null
+    actDeadline: table.turnDeadline || null,
+    // 新增：记录服务器发送状态时的当前时间戳
+    serverTimestamp: Date.now()
   };
 
   io.to(table.roomCode).emit("state", pub);
@@ -558,8 +574,6 @@ function proceedAfterBetting(table){
 function runOutToShowdown(table){
   while(table.community.length < 5) table.community.push(table.deck.pop());
   goShowdown(table);
-  // Broadcast win sound for multiple winners
-  io.to(table.roomCode).emit("play_sound", { type: SOUND_TYPES.WIN, playerIds: potWinners.map(w => w.playerId) });
 }
 
 // schedule next hand after a delay
@@ -696,7 +710,7 @@ function goShowdown(table){
 
   setTimeout(() => {
     requestRebuysAndNext(table);
-  }, 5000);
+  }, 3000);
 }
 
 // 新增功能：当只剩一名玩家未弃牌时，结束本局并判定其获胜
@@ -731,11 +745,11 @@ function endHandSingleWinner(table, winner){
 }
 
 // ---------------- Rebuy: reveal survivors first ----------------
-function requestRebuysAndNext(table){
-  table.rebuyPending = new Set();
-  const need = table.players.filter(p=>p.connected && p.chips <= 0);
-  if(need.length === 0){ ensureNextHand(table); return; }
-
+function requestRebuysAndNext(table){ table.rebuyPending = new Set(); 
+  const need = table.players.filter(p=>p.connected && p.chips <= 0); // 1. 如果没有人需要重买，直接安排下一局并返回 
+  if(need.length === 0){ ensureNextHand(table); return; } // 2. 关键修改：检查是否有足够的非输光玩家来开始下一局 
+  const readyToPlay = table.players.filter(p => p.connected && p.chips > 0).length; if (readyToPlay >= 2) { ensureNextHand(table); } 
+  
   // force reveal map once (clients will show survivors' hands)
   table._forceRevealMap = true;
   broadcastState(table);
@@ -750,7 +764,6 @@ function requestRebuysAndNext(table){
 
 // ---------------- Start hand (blinds & deal) ----------------
 function tryStartHand(table){
-  if(table.rebuyPending && table.rebuyPending.size > 0) return;
   if(table.state !== "waiting" && table.state !== "showdown") return;
 
   // ready: connected players with chips > 0 (not in rebuyPending)
@@ -978,7 +991,7 @@ io.on("connection", socket=>{
     }
     table._forceRevealMap = true;
     broadcastState(table);
-    if(table.rebuyPending.size === 0) ensureNextHand(table);
+    ensureNextHand(table); // 关键修改：无论是否有其他玩家等待重买，都尝试启动下一局
   });
 
   socket.on("action", ({type, amount})=>{
@@ -1074,9 +1087,9 @@ io.on("connection", socket=>{
 
     broadcastState(table);
 
-      // 广播音效
+      // 玩家主动操作，只向其他玩家广播音效
     if (soundType) {
-      io.to(table.roomCode).emit("play_sound", { type: soundType, playerId: p.playerId });
+      socket.broadcast.to(table.roomCode).emit("play_sound", { type: soundType, playerId: p.playerId });
     }
 
     const next = nextPendingAfter(table, p.seat) || findNextActorFromSeat(table, p.seat);
@@ -1087,6 +1100,16 @@ io.on("connection", socket=>{
     }else{
       clearTurnTimer(table);
       proceedAfterBetting(table);
+    }
+  });
+  
+  socket.on('sync_state', () => {
+    // 找到该玩家所在房间
+    const table = Object.values(rooms).find(t =>
+      t.players.some(p => p.id === socket.id || p.playerId === socket.playerId)
+    );
+    if (table) {
+      broadcastState(table);
     }
   });
 
