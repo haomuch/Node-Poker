@@ -7,7 +7,6 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 //app.use(express.static(__dirname));//把网站音频文件替换为下面的长期缓存策略
-app.use(express.static(__dirname));
 app.use('/media', express.static(__dirname + '/media', {
   setHeaders: (res, path) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,9 +15,25 @@ app.use('/media', express.static(__dirname + '/media', {
     // 可选：强制 MIME 类型
     if (path.endsWith('.m4a')) {
       res.setHeader('Content-Type', 'audio/mp4');
+    } else if (path.endsWith('.png')) {
+      // 新增：明确设置 .png 的 Content-Type
+      res.setHeader('Content-Type', 'image/png');
     }
     // 可选：强制缓存策略
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+}));
+
+// ---------------- 静态文件服务和缓存配置 ----------------
+app.use(express.static(__dirname, {
+  setHeaders: (res, path) => {
+    // 检查路径是否在 /media 目录下（可选，但更安全）
+    if (!path.includes('/media')) {
+      // 24小时 = 86400秒
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+    // 如果是 /media 文件，这个中间件会因为没有 path 匹配而跳过，或者直接由下面的 /media 中间件处理。
+    // 为了确保 index.html, client.js 等得到缓存，此配置是必要的。
   }
 }));
 
@@ -1087,7 +1102,7 @@ io.on("connection", socket=>{
 
     broadcastState(table);
 
-      // 玩家主动操作，只向其他玩家广播音效
+    // 玩家主动操作，只向其他玩家广播音效
     if (soundType) {
       socket.broadcast.to(table.roomCode).emit("play_sound", { type: soundType, playerId: p.playerId });
     }

@@ -69,10 +69,8 @@ async function playSound(type) {
   }
   
   try {
-    // 【修改点 3: 移除 playSound 内部的 resume 尝试】
-    // 假设：每次用户交互前（如点击按钮）都已调用 await unlockAudioContext() 确保上下文是 Running 或 Suspended
+    // 假设：每次用户交互（如点击按钮）都已调用 unlockAudioContext() 确保上下文是 Running 或 Suspended
     // 并且如果被关闭（closed）也已经被重建和重载。
-    // 因此这里不再需要重复检查和 resume。
 
     const source = audioContext.createBufferSource();
     source.buffer = soundBuffers[type];
@@ -113,11 +111,6 @@ async function unlockAudioContext() {
     await initAudio(audioContext); 
     console.log('Audio buffers reloaded for new context');
   }
-
-  // ***** 【最终修复点：强制延迟稳定】 *****
-  // 在 iOS 上，新创建或刚恢复的 AudioContext 实例可能需要几毫秒才能稳定。
-  await new Promise(resolve => setTimeout(resolve, 50)); 
-  console.log('Forced 50ms stabilization delay passed.');
 
   // 如果是 suspended，尝试 resume
   if (audioContext.state === 'suspended') {
@@ -460,11 +453,6 @@ socket.on("joined", async ({ seat, chips, waiting, room, playerId }) => {
   }
   document.getElementById("join-overlay").style.display = "none";
   els.actions.style.display = "block";
-
-  // 断线重连后清除“已交互”标志，防止使用旧交互状态误放音
-  audioUserInteracted = false;
-
-  render();
 });
 
 socket.on("rejected", msg => {
@@ -647,8 +635,7 @@ window.addEventListener('load', async () => {  // 修改：添加 async
         audioContext = null;
         console.log('AudioContext closed and cleared on visibilitychange.');
       }
-      audioUserInteracted = false;
-  
+      // 创建新的 AudioContext 并重新加载音效
       try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         await initAudio(audioContext);
@@ -656,6 +643,8 @@ window.addEventListener('load', async () => {  // 修改：添加 async
       } catch (e) {
         console.error('Audio re-init failed on visibilitychange:', e);
       }
+      // 在 AudioContext 重建后，等待新的用户交互
+      audioUserInteracted = false;
   
       // 重新启动计时器逻辑（保持不变）
       if (perSecondTimer) clearInterval(perSecondTimer);
@@ -677,11 +666,6 @@ window.addEventListener('load', async () => {  // 修改：添加 async
     }
   });
   
-  window.addEventListener('focus', async () => { // 【修复点 B-4】改为 async
-    // 在 focus 事件中也执行完整的解锁流程
-    await unlockAudioContext();
-  });
-
   // Sound toggle
   const soundToggle = document.getElementById('sound-toggle');
   if (soundToggle) {
@@ -707,7 +691,9 @@ window.addEventListener('load', async () => {  // 修改：添加 async
 
 // 保留 join/create 中的 unlock
 els.joinBtn.addEventListener("click", async () => {
-  unlockAudioContext();  // 修改：用新函数
+  if (!audioUserInteracted) {
+    await unlockAudioContext();
+  }
   const name = (els.nameInput.value || "").trim() || ("Player" + Math.floor(Math.random() * 1000));
   const room = (els.roomInput.value || "").trim();
   me.name = name;
@@ -717,7 +703,9 @@ els.joinBtn.addEventListener("click", async () => {
 });
 
 els.createBtn.addEventListener("click", async () => {  // 修改：添加 async
-  unlockAudioContext();  // 修改：用新函数（替换 unlockAudio()）
+  if (!audioUserInteracted) {
+    await unlockAudioContext();
+  }
   const name = (els.nameInput.value || "").trim() || ("Player" + Math.floor(Math.random() * 1000));
   me.name = name;
   setWithExpiry('pokerUsername', name);
@@ -729,7 +717,9 @@ els.roomInput.addEventListener("keydown", e => { if (e.key === "Enter") document
 
 // 在所有行动按钮添加解锁（e.g., btnFold）
 els.btnFold.addEventListener("click", async () => {
-  await unlockAudioContext();  // 新增：每个交互重试
+  if (!audioUserInteracted) {
+    await unlockAudioContext();
+  }
   // 【修改：在发送 action 之前，本地播放弃牌音效】
   playSound('fold');
   socket.emit("action", { type: "fold" });
@@ -737,8 +727,10 @@ els.btnFold.addEventListener("click", async () => {
 
 // 类似：btnCallCheck, btnRaise, raiseBy keydown
 els.btnCallCheck.addEventListener("click", async () => {
+  if (!audioUserInteracted) {
+    await unlockAudioContext();
+  }
   if (els.btnCallCheck.disabled) return; // 防止非回合时本地触发
-  await unlockAudioContext();
   if (actionOpts.canCheck) {
     // 【修改：本地播放过牌音效】
     playSound('check');
@@ -751,15 +743,19 @@ els.btnCallCheck.addEventListener("click", async () => {
 });
 
 els.btnRaise.addEventListener("click", async () => {
-  await unlockAudioContext();
+  if (!audioUserInteracted) {
+    await unlockAudioContext();
+  }
   // 【修改：本地播放加注音效（使用 'bet'）】
   playSound('bet');
   sendRaiseAction();
 });
 
 els.raiseBy.addEventListener("keydown", async e => {
-  if (e.key === "Enter") {
+  if (!audioUserInteracted) {
     await unlockAudioContext();
+  }
+  if (e.key === "Enter") {
     // 【修改：本地播放加注音效（使用 'bet'）】
     playSound('bet');
     sendRaiseAction();
@@ -785,7 +781,6 @@ window.addEventListener('keydown', async (e) => {
     case 'B': // B: Bet/Raise (加注)
       e.preventDefault(); // 阻止浏览器默认行为
       if (!els.btnRaise.disabled) {
-        await unlockAudioContext();
         playSound('bet'); // 本地播放加注音效
         sendRaiseAction();
       }
@@ -795,7 +790,6 @@ window.addEventListener('keydown', async (e) => {
       e.preventDefault();
       // 如果不是过牌模式 (canCheck=false) 且按钮没有禁用
       if (!actionOpts.canCheck && !els.btnCallCheck.disabled) {
-        await unlockAudioContext();
         playSound('bet'); // 跟注使用 'bet' 音效
         socket.emit("action", { type: "call" });
       }
@@ -805,7 +799,6 @@ window.addEventListener('keydown', async (e) => {
       e.preventDefault();
       // 如果是过牌模式 (canCheck=true) 且按钮没有禁用
       if (actionOpts.canCheck && !els.btnCallCheck.disabled) {
-        await unlockAudioContext();
         playSound('check'); // 本地播放过牌音效
         socket.emit("action", { type: "check" });
       }
@@ -814,7 +807,6 @@ window.addEventListener('keydown', async (e) => {
     case 'F': // F: Fold (弃牌)
       e.preventDefault();
       if (!els.btnFold.disabled) {
-        await unlockAudioContext();
         playSound('fold'); // 本地播放弃牌音效
         socket.emit("action", { type: "fold" });
       }
