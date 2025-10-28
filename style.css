@@ -11,6 +11,10 @@ html, body { height: 100%; margin: 0; background: var(--bg); font-family: system
 html {
   touch-action: pan-x pan-y;
   min-height: 100%; /* for Safari */
+  -webkit-text-size-adjust: 100%;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Scale table dynamically based on viewport */

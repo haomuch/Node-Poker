@@ -20,7 +20,40 @@ const ASSUMED_LATENCY = 0; // 新增：假设的单程平均网络延迟（ms）
 // 新增：记录用户是否已通过交互解锁音频，断线重连时重置为 false
 let audioUserInteracted = false;
 
-// 移除旧 sounds 对象和初始化
+/**
+ * 专门用于在 iOS Safari 上禁用双击缩放 (Double-Tap Zoom)
+ * 同时保留页面的其他触摸交互 (如滚动和单次点击)
+ */
+function disableDoubleTapZoom() {
+    let lastTouchEnd = 0;
+    
+    // 监听触摸结束事件
+    document.addEventListener('touchend', function(event) {
+        // 获取当前时间戳
+        const now = (new Date()).getTime();
+        
+        // 判断两次 'touchend' 事件的时间间隔
+        // 如果两次触摸结束时间间隔小于 300 毫秒，则认为是双击
+        if (now - lastTouchEnd <= 300) {
+            // 阻止默认行为，从而阻止浏览器进行双击缩放
+            event.preventDefault();
+        }
+        
+        // 更新上次触摸结束的时间
+        lastTouchEnd = now;
+    }, false); 
+    
+    // 额外地，为避免某些浏览器在长按时弹出上下文菜单，
+    // 可以添加以下代码，但请注意，这可能会影响某些交互，如果不需要可省略。
+    /*
+    document.addEventListener('gesturestart', function(e) {
+        e.preventDefault();
+    });
+    */
+}
+
+// 在页面加载完成后执行禁用函数
+window.onload = disableDoubleTapZoom;
 
 // 新增：Web Audio API
 let audioContext = null;
